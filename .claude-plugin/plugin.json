@@ -1,0 +1,12 @@
+{
+  "name": "legislatie-ro",
+  "version": "6.1.0",
+  "description": "Legislația românească de pe legislatie.just.ro: textul în forma consolidată în vigoare (cu data consolidării), extragerea articolelor, note de modificare și decizii ÎCCJ/CCR. Romanian legislation from the official portal, in its current consolidated form.",
+  "author": {
+    "name": "Mihai Dobre"
+  },
+  "homepage": "https://github.com/sw33tr/claude-legislatie-ro",
+  "repository": "https://github.com/sw33tr/claude-legislatie-ro",
+  "license": "Apache-2.0",
+  "keywords": ["romania", "legislatie", "legislation", "law", "legal", "legislatie.just.ro", "monitorul-oficial"]
+}

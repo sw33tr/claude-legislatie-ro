@@ -1,0 +1,19 @@
+{
+  "name": "legislatie-ro",
+  "owner": {
+    "name": "Mihai Dobre"
+  },
+  "metadata": {
+    "description": "Legislația românească (legislatie.just.ro) pentru Claude."
+  },
+  "plugins": [
+    {
+      "name": "legislatie-ro",
+      "source": "./",
+      "description": "Textul în vigoare al actelor normative românești de pe legislatie.just.ro, cu data consolidării și extragerea articolelor.",
+      "version": "6.1.0",
+      "license": "Apache-2.0",
+      "category": "legal"
+    }
+  ]
+}
