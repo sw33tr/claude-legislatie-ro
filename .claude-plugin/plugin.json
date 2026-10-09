@@ -8,6 +8,17 @@
   },
   "homepage": "https://github.com/sw33tr/claude-legislatie-ro",
   "repository": "https://github.com/sw33tr/claude-legislatie-ro",
+  "documentationUrl": "https://github.com/sw33tr/claude-legislatie-ro#readme",
+  "supportUrl": "https://github.com/sw33tr/claude-legislatie-ro/issues",
+  "privacyPolicyUrl": "https://github.com/sw33tr/claude-legislatie-ro/blob/main/PRIVACY.md",
   "license": "Apache-2.0",
-  "keywords": ["romania", "legislatie", "legislation", "law", "legal", "legislatie.just.ro", "monitorul-oficial"]
+  "keywords": [
+    "romania",
+    "legislatie",
+    "legislation",
+    "law",
+    "legal",
+    "legislatie.just.ro",
+    "monitorul-oficial"
+  ]
 }
