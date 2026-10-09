@@ -27,6 +27,7 @@ import json
 import argparse
 import http.client
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape as xml_escape
 import uuid
 import urllib.request
 import urllib.error
@@ -45,39 +46,26 @@ NS_WSA = "http://www.w3.org/2005/08/addressing"
 
 CACHE_DIR = lj_core.CACHE_DIR
 
-# ── Tipuri de acte: abrevieri -> valoare SearchTitlu ────────────────────────
+# ── Tipuri de acte -> valoarea SearchTitlu ──────────────────────────────────
+# Cheile sunt majuscule, fără diacritice și fără punctuație (vezi _tip_key), ca să prindă și
+# formele articulate din limbajul curent: „Legea”, „Ordinul”, „Hotărârea”, „O.U.G.”.
 ACT_TYPE_MAP = {
-    "OUG": "ORDONANTA DE URGENTA",
-    "ORDONANTA DE URGENTA": "ORDONANTA DE URGENTA",
-    "ORDONANȚĂ DE URGENȚĂ": "ORDONANTA DE URGENTA",
-    "OG": "ORDONANTA",
-    "ORDONANTA": "ORDONANTA",
-    "ORDONANȚĂ": "ORDONANTA",
-    "LEGE": "LEGE",
-    "LEGEA": "LEGE",
-    "L": "LEGE",
-    "HG": "HOTARARE",
-    "HOTARARE": "HOTARARE",
-    "HOTĂRÂRE": "HOTARARE",
-    "DECIZIE": "DECIZIE",
-    "DECRET": "DECRET",
-    "ORDIN": "ORDIN",
-    "REGULAMENT": "REGULAMENT",
-    "NORME": "NORME",
-    "INSTRUCTIUNI": "INSTRUCTIUNI",
-    "COD": "COD",
+    "OUG": "ORDONANTA DE URGENTA", "ORDONANTA DE URGENTA": "ORDONANTA DE URGENTA",
+    "OG": "ORDONANTA", "ORDONANTA": "ORDONANTA",
+    "LEGE": "LEGE", "LEGEA": "LEGE", "L": "LEGE",
+    "HG": "HOTARARE", "HOTARARE": "HOTARARE", "HOTARAREA": "HOTARARE", "HOTARIRE": "HOTARARE",
+    "DECIZIE": "DECIZIE", "DECIZIA": "DECIZIE",
+    "DECRET": "DECRET", "DECRETUL": "DECRET",
+    "ORDIN": "ORDIN", "ORDINUL": "ORDIN",
+    "REGULAMENT": "REGULAMENT", "REGULAMENTUL": "REGULAMENT",
+    "NORME": "NORME", "NORMELE": "NORME",
+    "INSTRUCTIUNI": "INSTRUCTIUNI", "INSTRUCTIUNILE": "INSTRUCTIUNI",
+    "COD": "COD", "CODUL": "COD",
 }
 
-# Abrevieri care implică un emitent anume (preferință, nu filtru strict).
-AUTO_EMITENT = {
-    "HG": "guvern",
-    "OUG": "guvern",
-    "OG": "guvern",
-    "ORDONANTA DE URGENTA": "guvern",
-    "ORDONANȚĂ DE URGENȚĂ": "guvern",
-    "ORDONANTA": "guvern",
-    "ORDONANȚĂ": "guvern",
-}
+# Tipuri care implică un emitent anume (preferință, nu filtru strict).
+AUTO_EMITENT = {"HG": "guvern", "OUG": "guvern", "OG": "guvern",
+                "ORDONANTA DE URGENTA": "guvern", "ORDONANTA": "guvern"}
 
 
 def _norm(s: str) -> str:
@@ -97,7 +85,18 @@ def _matches_emitent(result: dict, emitent: str) -> bool:
     return _norm(emitent) in _norm(result.get("Emitent", ""))
 
 
+def _act_year(result: dict):
+    """Anul din titlul actului („DECIZIA nr. 60 din 25 februarie 2025 …”); None dacă lipsește."""
+    m = re.search(r"\bdin\s+\d{1,2}\s+\w+\s+(\d{4})\b", result.get("Titlu", "")[:160])
+    return m.group(1) if m else None
+
+
 def _matches_year(result: dict, year: str) -> bool:
+    """Anul actului e cel din titlu (DataVigoare poate fi anul următor: Legea 554/2004 -> 2005).
+    Fără dată în titlu, cădem pe vechea verificare largă (câmpurile conțin anul)."""
+    titlu_an = _act_year(result)
+    if titlu_an:
+        return titlu_an == year
     for key in ("DataVigoare", "DataActualizare", "Titlu"):
         if year in result.get(key, ""):
             return True
@@ -149,6 +148,9 @@ def get_token() -> str:
 
 def search(token, search_titlu=None, search_numar=None, search_an=None,
            search_text=None, pagina=1, rezultate=10):
+    # Valorile intră într-un document XML: „&” sau „<” neescapate fac API-ul să răspundă 500.
+    search_titlu, search_numar, search_an, search_text = (
+        xml_escape(str(v)) if v else v for v in (search_titlu, search_numar, search_an, search_text))
     nil = 'i:nil="true"'
     d = "d4p1"
     titlu_xml = f"<{d}:SearchTitlu>{search_titlu}</{d}:SearchTitlu>" if search_titlu else f"<{d}:SearchTitlu {nil} />"
@@ -178,27 +180,45 @@ def search(token, search_titlu=None, search_numar=None, search_an=None,
     return results
 
 
+def _tip_key(tip):
+    """„Ordinul”, „O.U.G.”, „Hotărârea” -> cheie pentru ACT_TYPE_MAP (majuscule, fără diacritice)."""
+    return re.sub(r"\s+", " ", _norm(tip)).strip().upper()
+
+
 def parse_act_reference(text):
-    text = text.strip()
-    m = re.match(r"^(.+?)\s+(?:nr\.?\s*)?(\d+)\s*/\s*(\d{4})$", text, re.IGNORECASE)
+    """„OUG 57/2019”, „Legea nr. 53/2003”, „HG 1336/2022 privind …”, „art. 5 din OUG 57/2019”.
+    None -> căutare după text liber."""
+    m = re.match(r"^(.+?)\s+(?:nr\.?\s*)?(\d+)\s*/\s*(\d{4})(?![\d/])", text.strip(), re.IGNORECASE)
     if not m:
         return None
-    tip = m.group(1).strip().upper()
-    return {
-        "SearchTitlu": ACT_TYPE_MAP.get(tip, tip),
-        "SearchNumar": m.group(2),
-        "SearchAn": m.group(3),
-        "_auto_emitent": AUTO_EMITENT.get(tip),
-    }
+    words = _tip_key(m.group(1)).split(" ")
+    candidates = [" ".join(words[-n:]) for n in range(min(3, len(words)), 0, -1)]  # „art. 5 din OUG” -> „OUG”
+    candidates += [" ".join(words[:n]) for n in range(1, min(3, len(words)) + 1)]  # „Hotărârea Guvernului” -> „HOTARAREA”
+    for tip in candidates:
+        if tip in ACT_TYPE_MAP:
+            return {"SearchTitlu": ACT_TYPE_MAP[tip], "SearchNumar": m.group(2),
+                    "SearchAn": m.group(3), "_auto_emitent": AUTO_EMITENT.get(tip)}
+    if len(words) <= 3:  # tip necunoscut dar plauzibil (ex. „Protocol 12/2015”): îl încercăm ca atare
+        return {"SearchTitlu": " ".join(words), "SearchNumar": m.group(2),
+                "SearchAn": m.group(3), "_auto_emitent": None}
+    return None
+
+
+# Tipuri cu un singur emitent posibil: la ele ne putem opri la prima potrivire de an.
+# Deciziile, ordinele, hotărârile fără emitent etc. vin de la instituții diferite cu același
+# număr și an (Decizia 60/2020: Prim-Ministrul pe pagina 1, CCR pe o pagină următoare).
+SINGLE_ISSUER = {"LEGE", "ORDONANTA DE URGENTA", "ORDONANTA", "DECRET"}
 
 
 def search_paged(token, search_titlu=None, search_numar=None, search_an=None,
-                 search_text=None, emitent=None, max_pages=12, per_page=10):
+                 search_text=None, emitent=None, max_pages=12, per_page=10, exhaustive=False):
     """Parcurge mai multe pagini de rezultate, cu deduplicare.
 
     Necesitate: API-ul plafonează RezultatePagina la 10 și NU filtrează după
     SearchAn, deci actul căutat poate fi pe paginile următoare. Ne oprim
-    devreme dacă am găsit deja un rezultat care trece filtrele (an + emitent).
+    devreme dacă am găsit deja un rezultat care trece filtrele (an + emitent),
+    cu excepția căutărilor `exhaustive` (tipuri cu mai mulți emitenți), unde
+    parcurgem toate paginile (până la max_pages) ca să vedem toate variantele.
     """
     seen, collected = set(), []
     for pag in range(1, max_pages + 1):
@@ -215,6 +235,8 @@ def search_paged(token, search_titlu=None, search_numar=None, search_an=None,
         # Fără criterii de filtrare client-side: o singură pagină e de ajuns.
         if not search_an and not emitent:
             break
+        if exhaustive:
+            continue
         # Oprire timpurie: avem deja un rezultat care trece toate filtrele?
         hit = [r for r in collected
                if (not search_an or _matches_year(r, search_an))
@@ -371,7 +393,11 @@ def main():
         parser.print_help()
         return 1
 
-    token = get_token()
+    try:
+        token = get_token()
+    except (RuntimeError, ET.ParseError) as e:
+        print("API-ul de căutare nu răspunde: %s" % e, file=sys.stderr)
+        return 6
     key_map = {"SearchTitlu": "search_titlu", "SearchNumar": "search_numar", "SearchAn": "search_an",
                "search_titlu": "search_titlu", "search_numar": "search_numar",
                "search_an": "search_an", "search_text": "search_text"}
@@ -381,14 +407,25 @@ def main():
     if not auto_emitent and args.tip:
         auto_emitent = AUTO_EMITENT.get(args.tip.strip().upper())
     effective_emitent = args.emitent or auto_emitent
-    results = search_paged(token, emitent=effective_emitent, max_pages=args.pagini, **kwargs)
+    exhaustive = bool(kwargs.get("search_an")) and not effective_emitent \
+        and kwargs.get("search_titlu") not in SINGLE_ISSUER
+    try:
+        results = search_paged(token, emitent=effective_emitent, max_pages=args.pagini,
+                               exhaustive=exhaustive, **kwargs)
+    except (RuntimeError, ET.ParseError) as e:
+        print("Căutarea a eșuat: %s" % e, file=sys.stderr)
+        return 6
 
-    # API-ul NU respectă SearchAn: filtrăm client-side.
+    # API-ul NU respectă SearchAn: filtrăm client-side. Fără potrivire de an nu livrăm altceva
+    # („Ordinul 600/2018” nu trebuie să întoarcă Ordinul 600/2023).
     year = kwargs.get("search_an")
     if year:
         filtered = [r for r in results if _matches_year(r, year)]
-        if filtered:
-            results = filtered
+        if results and not filtered:
+            print("Niciun rezultat din %s; API-ul a întors doar: %s" % (year, "; ".join(
+                "%s %s (%s)" % (r.get("TipAct", "?"), r.get("Numar", "?"), (r.get("DataVigoare") or "?")[:4])
+                for r in results[:5])), file=sys.stderr)
+        results = filtered
     if effective_emitent:
         filtered = [r for r in results if _matches_emitent(r, effective_emitent)]
         if args.emitent or filtered:  # explicit = strict; automat = doar dacă nu golește lista
@@ -404,6 +441,17 @@ def main():
 
     if not results or not results[0].get("LinkHtml"):
         print("Nu s-au găsit rezultate — nimic de descărcat.", file=sys.stderr)
+        return 2
+    # Același număr și an pot veni de la emitenți diferiți (Decizia 60/2020: Prim-Ministrul și CCR;
+    # Ordinul 1/2026: șase ministere). Fără --emitent nu alegem noi în locul utilizatorului.
+    emitenti = sorted({_norm(r.get("Emitent", "")) for r in results if r.get("LinkHtml")})
+    if len(emitenti) > 1 and not args.emitent:
+        print("AMBIGUU: %d acte cu acest număr și an, de la emitenți diferiți. Alege cu --emitent:" % len(results),
+              file=sys.stderr)
+        for r in results[:10]:
+            print("  - %s nr. %s — %s | %s" % (r.get("TipAct", "?"), r.get("Numar", "?"), r.get("Emitent", "?"),
+                  re.sub(r"\s+", " ", r.get("Titlu", "").replace("﻿", "").split("EMITENT")[0]).strip()[:90]),
+                  file=sys.stderr)
         return 2
     first = results[0]
     titlu = re.sub(r"\s+", " ", first.get("Titlu", "").replace("\ufeff", "").split("EMITENT")[0]).strip()[:160]

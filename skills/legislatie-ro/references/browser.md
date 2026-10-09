@@ -10,7 +10,8 @@ Instrumente: Claude in Chrome (`mcp__claude-in-chrome__*`, preferat) sau browser
 ## Pași
 
 1. Află id-ul actului (căutarea prin API merge aproape oriunde: `legislatie_search.py "OUG 57/2019"`).
-   Dacă nici API-ul nu merge, folosește în browser formularul de căutare de pe `https://legislatie.just.ro`.
+   Dacă nici API-ul nu merge, folosește în browser formularul de căutare de pe `https://legislatie.just.ro`
+   (același lucru, direct: `https://legislatie.just.ro/Public/RezultateCautare?titlu=<cuvinte din titlu>`).
 2. `navigate` la `https://legislatie.just.ro/Public/DetaliiDocument/<id>`: această rută afișează
    ULTIMA consolidare. (`DetaliiDocumentAfis/<id>` afișează forma publicată inițial, deci nu o folosi.)
 3. Rulează cu `javascript_tool` fragmentul de mai jos (setează `ART`). Rezultatul poate fi:
@@ -35,14 +36,15 @@ await new Promise(r => { const f = () => document.readyState === 'complete' ? r(
   const other = [...document.querySelectorAll('#istoric_fa a[href]')]
     .map(a => a.textContent.trim() + '=' + (a.getAttribute('href').match(/\d+/g) || []).pop())[0];
   const t = document.body.innerText;
-  const lead = (t.match(/^\s*Articolul\s/gm) || []).length >= (t.match(/^\s*Art\.\s/gm) || []).length ? 'Articolul' : 'Art\\.';
+  const leads = ['Articolul', 'Art\\.', 'ARTICOL(?:UL)?'];   // „Articolul 5”, „Art. 5”, „ARTICOL UNIC” (decrete)
+  const lead = leads.map(l => [l, (t.match(new RegExp('^\\s*' + l + '\\s', 'gm')) || []).length]).sort((a, b) => b[1] - a[1])[0][0];
   if (!new RegExp('^\\s*' + lead + '\\s+\\S', 'm').test(t)) {
     const w = document.querySelector('#div_Formaconsolidata a[href*="DetaliiDocument"]');
     return (cur ? cur.title : '-') + ' | AMBALAJ: deschide DetaliiDocument/' + (w ? (w.getAttribute('href').match(/\d+/g) || []).pop() : '?');
   }
-  const esc = ART.replace(/[\^.]/g, c => '\\' + c);
+  const esc = /^unic$/i.test(ART) ? '(?:unic|UNIC|Unic)' : ART.replace(/[\^.]/g, c => '\\' + c);
   const start = new RegExp('^\\s*' + lead + '\\s+' + esc + '(?![\\d^])', 'gm');   // 56 nu prinde 560 sau 56^1
-  const next = new RegExp('^\\s*' + lead + '\\s+(?:\\d+(?:\\^\\d+)?|[IVXLCDM]+|unic)(?![\\w^])', 'gm');
+  const next = new RegExp('^\\s*' + lead + '\\s+(?:\\d+(?:\\^\\d+)?|[IVXLCDM]+|unic|UNIC)(?![\\w^])', 'gm');
   let best = null, m;
   while ((m = start.exec(t))) {           // prima apariție e de obicei cuprinsul: păstrăm corpul cel mai lung
     next.lastIndex = m.index + m[0].length;

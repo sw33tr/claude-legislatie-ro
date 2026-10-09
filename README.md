@@ -30,12 +30,15 @@ din ce dată e.
 - descarcă textul în vigoare și indică data consolidării;
 - extrage un articol (`56`, `485^1`, `XLIX`, `unic`) cu notele de modificare și deciziile ÎCCJ/CCR de sub el;
 - urmează automat actele care sunt doar „ambalaj” (Legea 53/2003 → Codul muncii);
-- semnalează actele posibil abrogate;
+- când același număr și an vin de la emitenți diferiți (Decizia 60/2020: Prim-Ministrul și CCR; Ordinul 1/2026:
+  șase instituții), listează emitenții și cere `--emitent` în loc să aleagă singur;
+- semnalează abrogarea când se vede în textul consolidat (notă în antet sau toate articolele marcate „Abrogat.”);
+  un act abrogat după ultima lui consolidare nu poate fi detectat așa;
 - oferă forme istorice (`--id <id consolidare> --exact`).
 
 ### Instalare
 
-**claude.ai / aplicația Claude:** descarcă [`dist/legislatie-ro.zip`](dist/legislatie-ro.zip), apoi în
+**claude.ai / aplicația Claude:** descarcă [`legislatie-ro.zip`](https://github.com/sw33tr/claude-legislatie-ro/releases/latest/download/legislatie-ro.zip) din ultima versiune publicată, apoi în
 Claude mergi la **Customize → Skills → + → Create skill → Upload a skill**.
 
 **Claude Code / Cowork (plugin):**
@@ -44,6 +47,20 @@ Claude mergi la **Customize → Skills → + → Create skill → Upload a skill
 /plugin marketplace add sw33tr/claude-legislatie-ro
 /plugin install legislatie-ro@legislatie-ro
 ```
+
+### Ce rulează și ce trimite
+
+- Singurul server contactat este portalul oficial `legislatie.just.ro`: API-ul public SOAP
+  (`/apiws/FreeWebService.svc/SOAP`, prin http, cu revenire la https) pentru căutare și paginile
+  `Public/DetaliiDocument/<id>` (https) pentru text. Se trimite doar ce cauți (ex. `OUG 57/2019`).
+- Fără telemetrie, conturi sau chei API. Nu citește și nu trimite date personale.
+- Textul descărcat se păstrează local, în `legislatie_cache` din directorul temporar al sistemului
+  (sau în `$LEGISLATIE_CACHE`).
+- În Cowork, dacă portalul nu răspunde din cloud, skill-ul își copiază cele două scripturi într-un
+  folder ascuns `.legislatie-ro` dintr-un folder conectat de pe calculatorul tău, le rulează acolo
+  și îți spune că a creat folderul. Îl poți șterge oricând.
+- Ruta de browser rulează un fragment JavaScript (în `references/browser.md`) doar pe pagina
+  actului de pe portal, ca să extragă textul.
 
 ### Rețea
 
@@ -85,12 +102,14 @@ for the same act. They look alike, but the published form silently lacks every l
 
 **Features:** search by reference or free text; in-force text with its consolidation date;
 article extraction (`56`, `485^1`, `XLIX`) including the amendment notes and High Court /
-Constitutional Court decisions attached to it; wrapper-act resolution (Law 53/2003 → Labour Code);
-repeal warnings; historical versions.
+Constitutional Court decisions attached to it; wrapper-act resolution (Law 53/2003 → Labour Code); when the same number and year come from several
+issuers (decisions, ministerial orders) it lists them and asks for `--emitent` instead of guessing;
+repeal warnings when the consolidated text shows them (an act repealed after its last consolidation
+cannot be detected this way); historical versions.
 
 **Install:**
 
-- **claude.ai / Claude apps:** download [`dist/legislatie-ro.zip`](dist/legislatie-ro.zip), then go to
+- **claude.ai / Claude apps:** download [`legislatie-ro.zip`](https://github.com/sw33tr/claude-legislatie-ro/releases/latest/download/legislatie-ro.zip) from the latest release, then go to
   **Customize → Skills → + → Create skill → Upload a skill**.
 - **Claude Code / Cowork:** run `/plugin marketplace add sw33tr/claude-legislatie-ro`, then
   `/plugin install legislatie-ro@legislatie-ro`.
@@ -99,6 +118,16 @@ repeal warnings; historical versions.
 can usually search but not fetch text. The skill detects this and falls back, in order, to the
 user's computer (Cowork), the browser (Claude in Chrome), and finally the API text, clearly
 labelled as the published form.
+
+**What it runs and sends:** the only server contacted is the official portal
+`legislatie.just.ro`: its public SOAP API (`/apiws/FreeWebService.svc/SOAP`, over http with an
+https fallback) for search, and `Public/DetaliiDocument/<id>` pages (https) for text. Only your
+query (e.g. `OUG 57/2019`) is sent. No telemetry, accounts or API keys; no personal data is read or
+sent. Downloaded text is cached locally in `legislatie_cache` under the system temp directory (or
+`$LEGISLATIE_CACHE`). In Cowork, when the portal is unreachable from the cloud, the skill copies its
+two scripts into a hidden `.legislatie-ro` folder inside one of your connected folders, runs them
+there and tells you it did; you can delete the folder at any time. The browser route runs one
+JavaScript snippet (in `references/browser.md`) on the act's page on the portal to extract the text.
 
 **Standalone:** Python 3.6+, standard library only. See the commands above.
 

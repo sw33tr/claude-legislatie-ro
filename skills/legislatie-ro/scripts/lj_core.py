@@ -15,7 +15,7 @@ import argparse, json, os, re, ssl, sys, tempfile, time
 import urllib.error, urllib.request
 from html.parser import HTMLParser
 
-VERSION = "6.1.0"
+VERSION = "6.2.0"
 HOST = "legislatie.just.ro"
 UA = "Mozilla/5.0 (legislatie-skill)"
 CACHE_DIR = os.environ.get("LEGISLATIE_CACHE") or os.path.join(tempfile.gettempdir(), "legislatie_cache")
@@ -131,8 +131,51 @@ def parse_istoric(raw):
     return out
 
 
+# Titlurile de articol așa cum le scrie portalul: „Articolul 5”, „Art. 5”, „ARTICOL UNIC” (decrete).
+_ART_HEAD = r"(?:Articolul|ARTICOLUL|Art\.|ART\.|ARTICOL)"
+
+
+def _body_text(text):
+    """Corpul actului: după „Forma printabilă” (înaintea ei sunt meniul portalului și cuprinsul,
+    care repetă titlurile de articol), altfel după „Cuprinsul Actului”, altfel tot textul."""
+    for marker in ("Forma printabilă", "Cuprinsul Actului"):
+        i = text.find(marker)
+        if i >= 0:
+            return text[i:]
+    return text
+
+
 def _has_body(text):
-    return len(text) > 1500 and re.search(r"(?m)^(?:Articolul|Art\.)\s+\S", text) is not None
+    """Pagina conține corpul unui act. Pragul e mic: un decret cu „ARTICOL UNIC” are câteva sute
+    de caractere; discriminarea o face titlul de articol, nu lungimea."""
+    body = _body_text(text)
+    return len(body) > 150 and re.search(r"(?m)^%s\s+\S" % _ART_HEAD, body) is not None
+
+
+def repeal_warning(text):
+    """Portalul nu expune o stare „abrogat” a actului („Fișa act” spune „nu există acțiuni
+    suferite” chiar și pentru Legea 188/1999). Semnalăm doar ce se vede în text: o notă de
+    abrogare în antet sau (aproape) toate articolele marcate „Abrogat.”. Un act a cărui
+    consolidare s-a oprit înainte de abrogare (ex. Legea 571/2003) nu poate fi prins așa."""
+    body = _body_text(text)
+    # 1. Numărătoarea articolelor marcate „Abrogat.”: titluri cu text după număr; liniile-notă
+    #    („Articolul 1 din Capitolul I a fost abrogat de…”) nu sunt articole. Prima apariție per număr.
+    first = {}
+    for num, word in re.findall(r"(?m)^%s[ \t]+(\S+)[ \t]+(?!din\b|a fost\b)(\S+)" % _ART_HEAD, body):
+        first.setdefault(num, word)
+    gone = sum(1 for w in first.values() if w.lower().startswith("abrogat"))
+    if len(first) >= 3 and gone >= 0.9 * len(first):
+        return ("Posibil abrogat integral — %d din %d articole sunt marcate „Abrogat.” în forma "
+                "consolidată; verifică actul abrogator" % (gone, len(first)))
+    if len(first) >= 10 and gone >= 0.5 * len(first):
+        return ("Abrogat în mare parte — %d din %d articole sunt marcate „Abrogat.”; celelalte rămân "
+                "în vigoare în forma consolidată (ex. Legea 188/1999 după Codul administrativ)" % (gone, len(first)))
+    # 2. O notă de abrogare în antet care vorbește despre act, nu despre un capitol/articol al lui.
+    for ab in re.finditer(r"([^\n]{0,120})\ba fost abrogat[ăa]?\b[^\n]{0,160}", body[:6000]):
+        if not re.search(r"\b(?:Capitolul|Articolul|Art\.|Sec[țţ]iunea|Titlul|Partea|Anexa|Litera|"
+                         r"Alineatul|Punctul|Paragraful)\b", ab.group(1)):
+            return "Posibil abrogat — verifică: " + ab.group(0).strip()
+    return None
 
 
 def doc_id_of(act):
@@ -205,9 +248,7 @@ def get_in_force(act, no_cache=False, forma_baza=False, exact=False):
                              "sau consolidarea încă nepublicată: verifică actele modificatoare recente)")
             if not _has_body(text):
                 text = html_to_text(fetch_html("/Public/DetaliiDocumentAfis/%s" % doc_id))
-    head = text[:6000]
-    ab = re.search(r"[^\n]{0,120}\ba fost abrogat[ăa]?\b[^\n]{0,160}", head)
-    meta["avertisment"] = ("Posibil abrogat — verifică: " + ab.group(0).strip()) if ab else None
+    meta["avertisment"] = repeal_warning(text)
 
     os.makedirs(CACHE_DIR, exist_ok=True)
     with open(txt_p, "w", encoding="utf-8") as f:
@@ -230,16 +271,17 @@ def extract_articol(text, ref):
     """Textul articolului (cu Notele și deciziile de sub el). None dacă nu există."""
     ref = _norm_ref(ref)
     text = text if "\t" not in text[:5000] else clean_text(text)
-    lead = "Articolul" if len(re.findall(r"(?m)^Articolul\s", text)) >= \
-        len(re.findall(r"(?m)^Art\.\s", text)) else r"Art\."
+    # Forma dominantă a titlurilor în acest act: „Articolul N”, „Art. N” sau „ARTICOL UNIC”.
+    lead = max(("Articolul", r"Art\.", r"ARTICOL(?:UL)?"),
+               key=lambda l: len(re.findall(r"(?m)^%s\s" % l, text)))
     if re.fullmatch(r"[IVXLCDM]+", ref, re.I):
         num, stop = re.escape(ref.upper()), r"(?![IVXLCDM\^])"
     elif ref.lower() == "unic":
-        num, stop = "unic", r"\b"
+        num, stop = "(?:unic|UNIC|Unic)", r"\b"
     else:
         num, stop = re.escape(ref), r"(?![\d^])"
     start = re.compile(r"(?m)^%s\s+%s%s" % (lead, num, stop))
-    nxt = re.compile(r"(?m)^%s\s+(?:\d+(?:\^\d+)?|[IVXLCDM]+|unic)(?![\w^])" % lead)
+    nxt = re.compile(r"(?m)^%s\s+(?:\d+(?:\^\d+)?|[IVXLCDM]+|unic|UNIC)(?![\w^])" % lead)
     best = None
     for m in start.finditer(text):  # prima apariție e de obicei cuprinsul: luăm corpul cel mai lung
         n = nxt.search(text, m.end())

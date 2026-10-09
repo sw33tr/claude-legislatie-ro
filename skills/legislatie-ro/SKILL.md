@@ -44,8 +44,10 @@ ACT:    id 215925 — https://legislatie.just.ro/Public/DetaliiDocument/215925
 FORMA:  consolidată — Consolidarea din 12.09.2026
 ```
 
-Coduri de ieșire: `0` ok · `2` niciun rezultat · `3` **ROUTE_BLOCKED**, treci la ruta următoare ·
-`4` articol negăsit · `5` pagina fără text · `6` id greșit sau eroare de portal.
+Coduri de ieșire: `0` ok · `2` niciun rezultat **sau AMBIGUU** (același număr și an de la mai mulți emitenți:
+scriptul îi listează pe stderr; arată-i utilizatorului lista sau alege cu `--emitent`, nu ghici) ·
+`3` **ROUTE_BLOCKED**, treci la ruta următoare · `4` articol negăsit · `5` pagina fără text ·
+`6` id greșit, eroare de portal sau API de căutare căzut.
 
 Nu afișa niciodată textul integral al unui act mare. Folosește `--articol`, `--grep` sau `grep` pe fișierul din cache.
 
@@ -63,7 +65,7 @@ altfel sari la ruta 3. Pașii de mai jos sunt pentru Cowork:
 1. Caută o instalare existentă (orice folder conectat):
    `D=$(dirname "$(ls $HOME/mnt/*/.legislatie-ro/lj_core.py 2>/dev/null | head -1)"); python3 "$D/lj_core.py" --version`
 2. Dacă lipsește sau versiunea e mai mică decât `lj_core.VERSION` din `$S`, instaleaz-o: copiază ambele
-   scripturi în directorul de output al sesiunii sub **nume versionate** (ex. `lj_core_6.1.0.py`), pentru că
+   scripturi în directorul de output al sesiunii sub **nume versionate** (ex. `lj_core_6.2.0.py`), pentru că
    `device_commit_files` poate livra o încărcare anterioară cu același nume. Apoi fă commit în
    `<folder conectat>/.legislatie-ro/lj_core.py` și `…/legislatie_search.py`. Verifică cu `md5sum`.
    Spune-i utilizatorului, într-un rând, că ai creat folderul ascuns `.legislatie-ro`.
@@ -101,5 +103,11 @@ când întrebarea privește chiar forma inițială. Spune-i utilizatorului că n
   `Ordin 123/2024`, `Decizie N/AAAA`, `Decret N/AAAA`, sau text liber: `--text "codul administrativ"`.
 - API-ul ignoră anul și dă câte 10 rezultate pe pagină. Scriptul paginează (`--pagini`) și filtrează local.
 - Pentru HG, OUG și OG se preferă automat emitentul Guvernul. Filtru strict: `--emitent "Senatul"`.
+- Deciziile și ordinele au emitenți diferiți pentru același număr și an (Decizia 60/2020: Prim-Ministrul și CCR;
+  Ordinul 1/2026: șase instituții). Cu `--fetch`/`--articol` scriptul refuză să aleagă (cod 2) până nu dai
+  `--emitent "Curtea Constituțională"` / `--emitent "Prim-Ministrul"`; fără `--fetch` listează toate variantele.
+- Formele articulate merg (`Legea 53/2003`, `Ordinul 600/2018`, `Hotărârea 1336/2022`, `O.U.G. 57/2019`), la fel
+  o referință cu titlu după an (`OUG 57/2019 privind Codul administrativ`) sau `art. 5 din OUG 57/2019`.
+- Decretele și actele cu „ARTICOL UNIC” se extrag cu `--articol unic`.
 - Anexele actelor mari (regulamente, norme, metodologii) au adesea id propriu, deseori imediat
   următor actului de aprobare. Caută-le cu `--text "REGULAMENT de organizare …"`.
