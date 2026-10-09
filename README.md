@@ -54,6 +54,8 @@ Claude mergi la **Customize → Skills → + → Create skill → Upload a skill
   (`/apiws/FreeWebService.svc/SOAP`, prin http, cu revenire la https) pentru căutare și paginile
   `Public/DetaliiDocument/<id>` (https) pentru text. Se trimite doar ce cauți (ex. `OUG 57/2019`).
 - Fără telemetrie, conturi sau chei API. Nu citește și nu trimite date personale.
+- `http://tempuri.org/` și `schemas.xmlsoap.org` apar în cod doar ca namespace-uri XML cerute de protocolul SOAP;
+  nicio cerere nu pleacă spre ele.
 - Textul descărcat se păstrează local, în `legislatie_cache` din directorul temporar al sistemului
   (sau în `$LEGISLATIE_CACHE`).
 - În Cowork, dacă portalul nu răspunde din cloud, skill-ul își copiază cele două scripturi într-un
@@ -123,7 +125,8 @@ labelled as the published form.
 `legislatie.just.ro`: its public SOAP API (`/apiws/FreeWebService.svc/SOAP`, over http with an
 https fallback) for search, and `Public/DetaliiDocument/<id>` pages (https) for text. Only your
 query (e.g. `OUG 57/2019`) is sent. No telemetry, accounts or API keys; no personal data is read or
-sent. Downloaded text is cached locally in `legislatie_cache` under the system temp directory (or
+sent. `http://tempuri.org/` and `schemas.xmlsoap.org` appear in the code only as XML namespaces required by
+SOAP; no request is ever sent to them. Downloaded text is cached locally in `legislatie_cache` under the system temp directory (or
 `$LEGISLATIE_CACHE`). In Cowork, when the portal is unreachable from the cloud, the skill copies its
 two scripts into a hidden `.legislatie-ro` folder inside one of your connected folders, runs them
 there and tells you it did; you can delete the folder at any time. The browser route runs one

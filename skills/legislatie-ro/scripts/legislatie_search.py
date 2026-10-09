@@ -40,7 +40,7 @@ import lj_core  # noqa: E402
 # ── Config ──────────────────────────────────────────────────────────────────
 SOAP_HOST = "legislatie.just.ro"
 SOAP_PATH = "/apiws/FreeWebService.svc/SOAP"
-NS_TEMPURI = "http://tempuri.org/"
+NS_TEMPURI = "http://tempuri.org/"  # namespace XML al API-ului SOAP (identificator, nu un server contactat)
 NS_DC = "http://schemas.datacontract.org/2004/07/FreeWebService"
 NS_WSA = "http://www.w3.org/2005/08/addressing"
 
@@ -276,8 +276,9 @@ def diagnostic():
         html = "EROARE: %s" % e
     except LookupError as e:
         html = "EROARE portal: %s" % e
+    # urllib folosește singur proxy-ul din mediu; aici doar spunem dacă există unul (fără să-l citim).
     print("Diagnostic legislatie.just.ro  (python %s, proxy=%s)" % (
-        sys.version.split()[0], "da" if os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") else "nu"))
+        sys.version.split()[0], "da" if urllib.request.getproxies().get("https") else "nu"))
     print("  API SOAP  (http)  : %s" % api)
     print("  pagini HTML (https): %s" % html)
     api_ok, html_ok = api.startswith("2"), html == "200"

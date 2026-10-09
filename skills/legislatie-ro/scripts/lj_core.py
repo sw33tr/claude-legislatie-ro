@@ -15,7 +15,7 @@ import argparse, json, os, re, ssl, sys, tempfile, time
 import urllib.error, urllib.request
 from html.parser import HTMLParser
 
-VERSION = "6.2.0"
+VERSION = "6.2.1"
 HOST = "legislatie.just.ro"
 UA = "Mozilla/5.0 (legislatie-skill)"
 CACHE_DIR = os.environ.get("LEGISLATIE_CACHE") or os.path.join(tempfile.gettempdir(), "legislatie_cache")

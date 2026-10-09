@@ -11,7 +11,7 @@
       "name": "legislatie-ro",
       "source": "./",
       "description": "Textul în vigoare al actelor normative românești de pe legislatie.just.ro, cu data consolidării și extragerea articolelor.",
-      "version": "6.2.0",
+      "version": "6.2.1",
       "license": "Apache-2.0",
       "category": "legal"
     }
