@@ -65,7 +65,7 @@ altfel sari la ruta 3. Pașii de mai jos sunt pentru Cowork:
 1. Caută o instalare existentă (orice folder conectat):
    `D=$(dirname "$(ls $HOME/mnt/*/.legislatie-ro/lj_core.py 2>/dev/null | head -1)"); python3 "$D/lj_core.py" --version`
 2. Dacă lipsește sau versiunea e mai mică decât `lj_core.VERSION` din `$S`, instaleaz-o: copiază ambele
-   scripturi în directorul de output al sesiunii sub **nume versionate** (ex. `lj_core_6.2.1.py`), pentru că
+   scripturi în directorul de output al sesiunii sub **nume versionate** (ex. `lj_core_6.3.0.py`), pentru că
    `device_commit_files` poate livra o încărcare anterioară cu același nume. Apoi fă commit în
    `<folder conectat>/.legislatie-ro/lj_core.py` și `…/legislatie_search.py`. Verifică cu `md5sum`.
    Spune-i utilizatorului, într-un rând, că ai creat folderul ascuns `.legislatie-ro`.
@@ -109,5 +109,11 @@ când întrebarea privește chiar forma inițială. Spune-i utilizatorului că n
 - Formele articulate merg (`Legea 53/2003`, `Ordinul 600/2018`, `Hotărârea 1336/2022`, `O.U.G. 57/2019`), la fel
   o referință cu titlu după an (`OUG 57/2019 privind Codul administrativ`) sau `art. 5 din OUG 57/2019`.
 - Decretele și actele cu „ARTICOL UNIC” se extrag cu `--articol unic`.
+- Codurile merg după nume, fără număr: `"Codul muncii art. 39"`, `"art. 5 din Codul administrativ"`, `"Codul civil art. 1357"`
+  (administrativ, muncii, civil, penal, procedură civilă/penală, fiscal, procedură fiscală, silvic, insolvenței, vamal,
+  consumului, rutier). Un `art. N` scris în referință pornește singur descărcarea și extragerea articolului.
+- Emitentul scris în referință ține loc de `--emitent`: `"Decizia CCR 60/2020"`, `"Decizia ÎCCJ 60/2020"`,
+  `"Decizia Prim-ministrului 60/2020"`, `"Ordinul ANFP 1/2026"` (și ANAF, BNR, CSM, ANRE, MDLPA, MF, MAI, MJ, MMSS).
+- Numerele de articol cu punct de mii („Articolul 1.357” în Codul civil) se caută cu `1357` sau `1.357`, la fel.
 - Anexele actelor mari (regulamente, norme, metodologii) au adesea id propriu, deseori imediat
   următor actului de aprobare. Caută-le cu `--text "REGULAMENT de organizare …"`.

@@ -42,7 +42,8 @@ await new Promise(r => { const f = () => document.readyState === 'complete' ? r(
     const w = document.querySelector('#div_Formaconsolidata a[href*="DetaliiDocument"]');
     return (cur ? cur.title : '-') + ' | AMBALAJ: deschide DetaliiDocument/' + (w ? (w.getAttribute('href').match(/\d+/g) || []).pop() : '?');
   }
-  const esc = /^unic$/i.test(ART) ? '(?:unic|UNIC|Unic)' : ART.replace(/[\^.]/g, c => '\\' + c);
+  // Codul civil scrie „Articolul 1.357”: punctul de mii e opțional în căutare
+  const esc = /^unic$/i.test(ART) ? '(?:unic|UNIC|Unic)' : ART.replace(/\./g, '').replace(/[\^]/g, '\\^').replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1\\.?');
   const start = new RegExp('^\\s*' + lead + '\\s+' + esc + '(?![\\d^])', 'gm');   // 56 nu prinde 560 sau 56^1
   const next = new RegExp('^\\s*' + lead + '\\s+(?:\\d+(?:\\^\\d+)?|[IVXLCDM]+|unic|UNIC)(?![\\w^])', 'gm');
   let best = null, m;

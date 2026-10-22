@@ -26,7 +26,9 @@ din ce dată e.
 
 ### Ce face
 
-- caută actul după referință (`OUG 57/2019`, `Legea nr. 53/2003`, `HG 1336/2022`) sau după text liber;
+- caută actul după referință (`OUG 57/2019`, `Legea nr. 53/2003`, `HG 1336/2022`), după numele codului
+  (`Codul muncii art. 39`, `art. 5 din Codul administrativ`), cu emitentul în referință (`Decizia CCR 60/2020`)
+  sau după text liber;
 - descarcă textul în vigoare și indică data consolidării;
 - extrage un articol (`56`, `485^1`, `XLIX`, `unic`) cu notele de modificare și deciziile ÎCCJ/CCR de sub el;
 - urmează automat actele care sunt doar „ambalaj” (Legea 53/2003 → Codul muncii);
@@ -102,7 +104,8 @@ A Claude skill that looks up Romanian legislation on the official portal
 **Why:** the portal serves both the originally published text and the latest consolidation
 for the same act. They look alike, but the published form silently lacks every later amendment.
 
-**Features:** search by reference or free text; in-force text with its consolidation date;
+**Features:** search by reference, by code name (`Codul muncii art. 39`), with the issuer in the reference
+(`Decizia CCR 60/2020`) or free text; in-force text with its consolidation date;
 article extraction (`56`, `485^1`, `XLIX`) including the amendment notes and High Court /
 Constitutional Court decisions attached to it; wrapper-act resolution (Law 53/2003 → Labour Code); when the same number and year come from several
 issuers (decisions, ministerial orders) it lists them and asks for `--emitent` instead of guessing;

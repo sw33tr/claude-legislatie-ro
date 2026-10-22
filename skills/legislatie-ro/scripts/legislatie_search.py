@@ -82,7 +82,10 @@ def _norm(s: str) -> str:
 
 
 def _matches_emitent(result: dict, emitent: str) -> bool:
-    return _norm(emitent) in _norm(result.get("Emitent", ""))
+    """API-ul pierde uneori ș/ț („Curtea Constitu?ională” -> „constituionala”), deci literele s/t
+    din filtrul nostru sunt opționale la potrivire."""
+    pattern = "".join(c + "?" if c in "st" else c for c in _norm(emitent))
+    return re.search(pattern, _norm(result.get("Emitent", ""))) is not None
 
 
 def _act_year(result: dict):
@@ -182,22 +185,92 @@ def search(token, search_titlu=None, search_numar=None, search_an=None,
 
 def _tip_key(tip):
     """„Ordinul”, „O.U.G.”, „Hotărârea” -> cheie pentru ACT_TYPE_MAP (majuscule, fără diacritice)."""
-    return re.sub(r"\s+", " ", _norm(tip)).strip().upper()
+    return re.sub(r"\s+", " ", _norm(tip.replace("-", " "))).strip().upper()  # „Prim-ministrul” -> PRIM MINISTRUL
+
+
+# Numele uzuale ale codurilor -> referința actului. lj_core urmează singur „ambalajul” (Legea 53/2003 ->
+# Codul muncii), deci aici stau referințe stabile, nu id-uri de consolidare. Chei fără diacritice (vezi
+# _tip_key); „Codului” e adus la „Codul” înainte de potrivire.
+CODE_ALIASES = {
+    "CODUL ADMINISTRATIV": "OUG 57/2019",
+    "CODUL MUNCII": "Lege 53/2003",
+    "CODUL CIVIL": "Lege 287/2009",
+    "CODUL DE PROCEDURA CIVILA": "Lege 134/2010",
+    "CODUL PENAL": "Lege 286/2009",
+    "CODUL DE PROCEDURA PENALA": "Lege 135/2010",
+    "CODUL FISCAL": "Lege 227/2015",
+    "CODUL DE PROCEDURA FISCALA": "Lege 207/2015",
+    "CODUL SILVIC": "Lege 46/2008",
+    "CODUL INSOLVENTEI": "Lege 85/2014",
+    "CODUL VAMAL": "Lege 86/2006",
+    "CODUL CONSUMULUI": "Lege 296/2004",
+    "CODUL RUTIER": "OUG 195/2002",
+}
+
+# Emitentul scris în referință („Decizia CCR 60/2020”, „Ordinul ANFP 1/2026”) -> filtru --emitent.
+# Valorile se potrivesc cu câmpul Emitent al API-ului prin _matches_emitent (tolerant la ș/ț pierdute).
+ISSUER_ALIASES = {
+    "CCR": "Curtea Constituțională", "CURTEA CONSTITUTIONALA": "Curtea Constituțională",
+    "CURTII CONSTITUTIONALE": "Curtea Constituțională",
+    "ICCJ": "Înalta Curte de Casație și Justiție", "INALTA CURTE": "Înalta Curte de Casație și Justiție",
+    "INALTEI CURTI": "Înalta Curte de Casație și Justiție",
+    "PM": "Prim-Ministrul", "PRIM MINISTRUL": "Prim-Ministrul", "PRIM MINISTRULUI": "Prim-Ministrul",
+    "PRIMUL MINISTRU": "Prim-Ministrul", "PRIMULUI MINISTRU": "Prim-Ministrul",
+    "GUVERNUL": "Guvernul", "GUVERNULUI": "Guvernul",
+    "PRESEDINTELE": "Președintele României", "PRESEDINTELUI": "Președintele României",
+    "PARLAMENTUL": "Parlamentul", "PARLAMENTULUI": "Parlamentul",
+    "SENATUL": "Senatul", "SENATULUI": "Senatul",
+    "CAMERA DEPUTATILOR": "Camera Deputaților", "CAMEREI DEPUTATILOR": "Camera Deputaților",
+    "ANFP": "Agenția Națională a Funcționarilor Publici", "ANAF": "Agenția Națională de Administrare Fiscală",
+    "BNR": "Banca Națională a României", "CSM": "Consiliul Superior al Magistraturii",
+    "ANRE": "Autoritatea Națională de Reglementare în Domeniul Energiei",
+    "MDLPA": "Ministerul Dezvoltării", "MF": "Ministerul Finanțelor", "MAI": "Ministerul Afacerilor Interne",
+    "MJ": "Ministerul Justiției", "MMSS": "Ministerul Muncii", "MMPS": "Ministerul Muncii",
+}
+
+_ART_IN_TEXT = re.compile(r"\bart(?:icolul|\.)?\s*(\d+(?:\.\d{3})*(?:\s*\^\s*\d+)?[⁰¹²³⁴⁵⁶⁷⁸⁹]*|[IVXLCDM]+(?![a-z])|unic)\b",
+                          re.IGNORECASE)  # „1.357” = separator de mii (Codul civil)
+
+
+def _article_in(text):
+    """„art. 39”, „Articolul 485^1”, „art. XVIII” din referință -> „39”, „485^1”, „XVIII”; altfel None."""
+    m = _ART_IN_TEXT.search(text)
+    return re.sub(r"\s+", "", m.group(1)) if m else None
+
+
+def resolve_code_alias(text):
+    """„Codul muncii art. 39” / „art. 39 din Codului muncii” -> („Lege 53/2003”, „39”); altfel None."""
+    key = _tip_key(text).replace("CODULUI ", "CODUL ")
+    for alias in sorted(CODE_ALIASES, key=len, reverse=True):
+        if re.search(r"\b%s\b" % alias, key):
+            return CODE_ALIASES[alias], _article_in(text)
+    return None
 
 
 def parse_act_reference(text):
-    """„OUG 57/2019”, „Legea nr. 53/2003”, „HG 1336/2022 privind …”, „art. 5 din OUG 57/2019”.
-    None -> căutare după text liber."""
-    m = re.match(r"^(.+?)\s+(?:nr\.?\s*)?(\d+)\s*/\s*(\d{4})(?![\d/])", text.strip(), re.IGNORECASE)
+    """„OUG 57/2019”, „Legea nr. 53/2003”, „HG 1336/2022 privind …”, „art. 5 din OUG 57/2019”,
+    „Decizia CCR 60/2020”, „Codul muncii art. 39”. None -> căutare după text liber."""
+    text = text.strip()
+    alias = resolve_code_alias(text)
+    if alias:
+        parsed = parse_act_reference(alias[0])
+        if parsed:
+            parsed["_articol"] = alias[1]
+        return parsed
+    m = re.match(r"^(.+?)\s+(?:nr\.?\s*)?(\d+)\s*/\s*(\d{4})(?![\d/])", text, re.IGNORECASE)
     if not m:
         return None
     words = _tip_key(m.group(1)).split(" ")
-    candidates = [" ".join(words[-n:]) for n in range(min(3, len(words)), 0, -1)]  # „art. 5 din OUG” -> „OUG”
-    candidates += [" ".join(words[:n]) for n in range(1, min(3, len(words)) + 1)]  # „Hotărârea Guvernului” -> „HOTARAREA”
-    for tip in candidates:
+    candidates = [(words[-n:], words[:-n]) for n in range(min(3, len(words)), 0, -1)]  # „art. 5 din OUG” -> „OUG”
+    candidates += [(words[:n], words[n:]) for n in range(1, min(3, len(words)) + 1)]  # „Hotărârea Guvernului” -> „HOTARAREA”
+    for tip_words, rest in candidates:
+        tip = " ".join(tip_words)
         if tip in ACT_TYPE_MAP:
-            return {"SearchTitlu": ACT_TYPE_MAP[tip], "SearchNumar": m.group(2),
-                    "SearchAn": m.group(3), "_auto_emitent": AUTO_EMITENT.get(tip)}
+            rest = " ".join(w for w in rest if w not in ("NR", "A", "AL", "DIN", "DE"))
+            emitent = next((v for k, v in ISSUER_ALIASES.items() if re.search(r"\b%s\b" % k, rest)), None)
+            return {"SearchTitlu": ACT_TYPE_MAP[tip], "SearchNumar": m.group(2), "SearchAn": m.group(3),
+                    "_auto_emitent": AUTO_EMITENT.get(tip), "_emitent": emitent,
+                    "_articol": _article_in(text[:m.start(2)])}
     if len(words) <= 3:  # tip necunoscut dar plauzibil (ex. „Protocol 12/2015”): îl încercăm ca atare
         return {"SearchTitlu": " ".join(words), "SearchNumar": m.group(2),
                 "SearchAn": m.group(3), "_auto_emitent": None}
@@ -381,6 +454,8 @@ def main():
     if args.referinta:
         parsed = parse_act_reference(args.referinta)
         search_params = parsed if parsed else {"search_text": args.referinta}
+        if parsed and parsed.get("_articol") and not (args.articol or args.grep):
+            args.articol, args.fetch = parsed["_articol"], True  # „Codul muncii art. 39” cere textul articolului
     else:
         if args.tip:
             search_params["search_titlu"] = ACT_TYPE_MAP.get(args.tip.strip().upper(), args.tip.strip().upper())
@@ -407,7 +482,8 @@ def main():
     auto_emitent = search_params.get("_auto_emitent")
     if not auto_emitent and args.tip:
         auto_emitent = AUTO_EMITENT.get(args.tip.strip().upper())
-    effective_emitent = args.emitent or auto_emitent
+    explicit_emitent = args.emitent or search_params.get("_emitent")  # --emitent sau „Decizia CCR …”
+    effective_emitent = explicit_emitent or auto_emitent
     exhaustive = bool(kwargs.get("search_an")) and not effective_emitent \
         and kwargs.get("search_titlu") not in SINGLE_ISSUER
     try:
@@ -429,7 +505,10 @@ def main():
         results = filtered
     if effective_emitent:
         filtered = [r for r in results if _matches_emitent(r, effective_emitent)]
-        if args.emitent or filtered:  # explicit = strict; automat = doar dacă nu golește lista
+        if explicit_emitent and results and not filtered:
+            print("Niciun act de la „%s”; emitenți găsiți: %s" % (effective_emitent, "; ".join(
+                sorted({r.get("Emitent", "?") for r in results}))), file=sys.stderr)
+        if explicit_emitent or filtered:  # explicit = strict; automat = doar dacă nu golește lista
             results = filtered
 
     if not args.fetch:
@@ -446,7 +525,7 @@ def main():
     # Același număr și an pot veni de la emitenți diferiți (Decizia 60/2020: Prim-Ministrul și CCR;
     # Ordinul 1/2026: șase ministere). Fără --emitent nu alegem noi în locul utilizatorului.
     emitenti = sorted({_norm(r.get("Emitent", "")) for r in results if r.get("LinkHtml")})
-    if len(emitenti) > 1 and not args.emitent:
+    if len(emitenti) > 1 and not explicit_emitent:
         print("AMBIGUU: %d acte cu acest număr și an, de la emitenți diferiți. Alege cu --emitent:" % len(results),
               file=sys.stderr)
         for r in results[:10]:

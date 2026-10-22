@@ -15,7 +15,7 @@ import argparse, json, os, re, ssl, sys, tempfile, time
 import urllib.error, urllib.request
 from html.parser import HTMLParser
 
-VERSION = "6.2.1"
+VERSION = "6.3.0"
 HOST = "legislatie.just.ro"
 UA = "Mozilla/5.0 (legislatie-skill)"
 CACHE_DIR = os.environ.get("LEGISLATIE_CACHE") or os.path.join(tempfile.gettempdir(), "legislatie_cache")
@@ -263,8 +263,19 @@ def _norm_ref(ref):
     ref = re.sub(r"^\s*(?:art\.?|articolul)\s*", "", ref.strip(), flags=re.I)
     sup = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹", "0123456789")
     ref = re.sub(r"\s*\^\s*\{?\s*(\d+)\s*\}?", r"^\1", ref)
+    ref = re.sub(r"(?<=\d)\.(?=\d{3}(?!\d))", "", ref)  # „1.357” (separator de mii) -> „1357”
     m = re.match(r"^(\d+)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)$", ref)
     return m.group(1) + "^" + m.group(2).translate(sup) if m else ref
+
+
+def _num_pattern(ref):
+    """„1357” -> r\"1\\.?357\": Codul civil scrie „Articolul 1.357”, alte acte „Articolul 1357”."""
+    head, sup = (ref.split("^", 1) + [None])[:2]
+    groups = []
+    while len(head) > 3:
+        groups.insert(0, head[-3:])
+        head = head[:-3]
+    return r"\.?".join([head] + groups) + (r"\^" + sup if sup else "")
 
 
 def extract_articol(text, ref):
@@ -279,9 +290,9 @@ def extract_articol(text, ref):
     elif ref.lower() == "unic":
         num, stop = "(?:unic|UNIC|Unic)", r"\b"
     else:
-        num, stop = re.escape(ref), r"(?![\d^])"
+        num, stop = _num_pattern(ref), r"(?![\d^.])"
     start = re.compile(r"(?m)^%s\s+%s%s" % (lead, num, stop))
-    nxt = re.compile(r"(?m)^%s\s+(?:\d+(?:\^\d+)?|[IVXLCDM]+|unic|UNIC)(?![\w^])" % lead)
+    nxt = re.compile(r"(?m)^%s\s+(?:\d+(?:\.\d{3})*(?:\^\d+)?|[IVXLCDM]+|unic|UNIC)(?![\w^.])" % lead)
     best = None
     for m in start.finditer(text):  # prima apariție e de obicei cuprinsul: luăm corpul cel mai lung
         n = nxt.search(text, m.end())
