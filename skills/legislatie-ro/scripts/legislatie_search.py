@@ -388,6 +388,12 @@ def _print_fetch(meta, args, api_label=None):
         with open(args.out, "w", encoding="utf-8") as f:
             f.write(text)
         print("SALVAT: %s" % args.out)
+    if args.modificari is not None:
+        try:
+            print("\n" + lj_core.format_fisa(meta.get("fisa"), args.modificari))
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 1
     if args.articol:
         art = lj_core.extract_articol(text, args.articol)
         if art is None:
@@ -397,6 +403,8 @@ def _print_fetch(meta, args, api_label=None):
             lj_core._norm_ref(args.articol), format(len(art), ","), art))
     elif args.grep:
         print("\n" + (lj_core.grep(text, args.grep, args.context) or "(nicio potrivire)"))
+    elif args.modificari is not None:
+        pass
     elif not args.silent:
         print("\nFolosește --articol <N>, --grep <regex> sau grep pe fișierul de mai sus.")
     return 0
@@ -421,6 +429,8 @@ def main():
     parser.add_argument("--context", type=int, default=1, help="Linii de context pentru --grep")
     parser.add_argument("--out", help="Salvează textul și aici")
     parser.add_argument("--silent", "--info", action="store_true", help="Doar antetul (forma, data), fără text")
+    parser.add_argument("--modificari", nargs="?", const="", metavar="DE-LA",
+                        help="Acțiunile din Fișa act (toate, sau de la AAAA-LL-ZZ / ZZ.LL.AAAA); implică --fetch")
     parser.add_argument("--no-cache", action="store_true", help="Ignoră cache-ul (TTL 6h)")
     parser.add_argument("--forma-baza", action="store_true", help="Forma publicată inițial, nu cea în vigoare")
     parser.add_argument("--exact", action="store_true", help="Cu --id: exact consolidarea istorică indicată")
@@ -435,7 +445,7 @@ def main():
         return 0
     if args.diagnostic:
         return diagnostic()
-    if args.articol or args.grep or args.silent:
+    if args.articol or args.grep or args.silent or args.modificari is not None:
         args.fetch = True
 
     if args.id:

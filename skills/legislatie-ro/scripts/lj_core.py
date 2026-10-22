@@ -12,10 +12,10 @@ Coduri de ieșire: 0 ok | 3 rețea: HTTPS către portal blocat din acest mediu |
                   4 articol negăsit | 5 pagina nu conține text de act | 6 act inexistent
 """
 import argparse, json, os, re, ssl, sys, tempfile, time
-import urllib.error, urllib.request
+import urllib.error, urllib.parse, urllib.request
 from html.parser import HTMLParser
 
-VERSION = "6.3.0"
+VERSION = "6.4.0"
 HOST = "legislatie.just.ro"
 UA = "Mozilla/5.0 (legislatie-skill)"
 CACHE_DIR = os.environ.get("LEGISLATIE_CACHE") or os.path.join(tempfile.gettempdir(), "legislatie_cache")
@@ -178,6 +178,100 @@ def repeal_warning(text):
     return None
 
 
+def fisa_act(doc_id, timeout=60):
+    """„Fișa act” a portalului (tab-ul „Acțiuni suferite”): toate acțiunile asupra actului, cu actul
+    care le-a produs și data. Se cere cu id-ul FORMEI DE BAZĂ (pe o consolidare primești doar ce s-a
+    întâmplat după ea). Rânduri: {'sectiune': 'Actul'|'ART. 5'…, 'op': 'ABROGAT DE'…,
+    'act': 'LEGE 141', 'data': 'AAAA-LL-ZZ', 'id': '300022'}. [] = nicio acțiune."""
+    req = urllib.request.Request(
+        "https://%s/Public/actiuniSuferite" % HOST,
+        data=urllib.parse.urlencode({"contor": doc_id}).encode(),
+        headers={"User-Agent": UA, "X-Requested-With": "XMLHttpRequest",
+                 "Content-Type": "application/x-www-form-urlencoded"})
+    with urlopen(req, timeout=timeout) as r:
+        html = json.loads(r.read().decode("utf-8", "replace")).get("acte", "")
+    rows = []
+    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", html, re.S):
+        cells = [clean_text(html_to_text(c)).replace("\n", " ") for c in re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)]
+        if len(cells) < 3 or cells[0] in ("SECTIUNE ACT", ""):
+            continue
+        m = re.match(r"^(.*?)\s*(\d{2})/(\d{2})/(\d{4})$", cells[2])
+        link = re.search(r"DetaliiDocument(?:Afis)?/(\d+)", tr)
+        rows.append({"sectiune": cells[0], "op": cells[1],
+                     "act": (m.group(1) if m else cells[2]).strip(),
+                     "data": "%s-%s-%s" % (m.group(4), m.group(3), m.group(2)) if m else None,
+                     "id": link.group(1) if link else None})
+    return rows
+
+
+def parse_forme(raw):
+    """Id-urile formelor de bază din blocul „Forme act” al paginii: forma inițială
+    (`incarcaFormaDeBaza(<id>)`) și republicările (`DetaliiDocument/<id>?isFormaDeBaza=True`)."""
+    ids = re.findall(r"incarcaFormaDeBaza\((\d+)\)", raw or "")
+    ids += re.findall(r"DetaliiDocument/(\d+)\?isFormaDeBaza=True", raw or "")
+    return list(dict.fromkeys(ids))
+
+
+def fisa_repeal(fisa):
+    """Abrogarea întregului act, dacă fișa o consemnează (rând cu secțiunea „Actul”)."""
+    for r in fisa or []:
+        if r["sectiune"].lower() == "actul" and "ABROGAT" in r["op"].upper():
+            partial = "PARTIAL" in r["op"].upper()
+            return "%s de %s la %s (Fișa act)%s" % (
+                "Abrogat parțial" if partial else "ABROGAT", r["act"], _ro_date(r["data"]),
+                "" if partial else " — nu mai e în vigoare; verifică actul abrogator")
+    return None
+
+
+def _ro_date(iso):
+    return "%s.%s.%s" % (iso[8:10], iso[5:7], iso[0:4]) if iso and len(iso) == 10 else (iso or "?")
+
+
+def _iso_date(s):
+    """„AAAA-LL-ZZ” sau „ZZ.LL.AAAA” -> „AAAA-LL-ZZ”; '' -> None (toate)."""
+    s = (s or "").strip()
+    if not s:
+        return None
+    m = re.match(r"^(\d{2})\.(\d{2})\.(\d{4})$", s)
+    if m:
+        return "%s-%s-%s" % (m.group(3), m.group(2), m.group(1))
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+        return s
+    raise ValueError("Dată necunoscută: %r (folosește AAAA-LL-ZZ sau ZZ.LL.AAAA)" % s)
+
+
+def fisa_line(fisa):
+    """Rezumat de un rând pentru antet."""
+    if fisa is None:
+        return "indisponibilă (Fișa act nu a răspuns)"
+    if not fisa:
+        return "nicio acțiune înregistrată (nemodificat, sau fișa încă neactualizată)"
+    last = max((r for r in fisa if r["data"]), key=lambda r: r["data"], default=fisa[0])
+    return "%d acțiuni; ultima: %s %s (%s %s)" % (
+        len(fisa), _ro_date(last["data"]), last["act"], last["sectiune"], last["op"].replace(" DE", "").lower())
+
+
+def format_fisa(fisa, de_la=None, per_act=12):
+    """Acțiunile din fișă grupate pe actul modificator, cele mai noi primele; filtrabile după dată."""
+    if fisa is None:
+        return "Fișa act indisponibilă."
+    de_la = _iso_date(de_la)
+    rows = [r for r in fisa if not de_la or (r["data"] or "") >= de_la]
+    head = "MODIFICĂRI din Fișa act (portalul o actualizează cu întârziere față de Monitorul Oficial): %d acțiuni%s" % (
+        len(fisa), ", %d de la %s" % (len(rows), _ro_date(de_la)) if de_la else "")
+    groups = {}
+    for r in rows:
+        key = (r["data"] or "", r["act"], r["id"])
+        groups.setdefault(key, []).append("%s %s" % (r["sectiune"], r["op"].replace(" DE", "").lower()))
+    out = [head]
+    for (data, act, aid), items in sorted(groups.items(), reverse=True):
+        shown = "; ".join(items[:per_act]) + (" … +%d" % (len(items) - per_act) if len(items) > per_act else "")
+        out.append("  %s  %s%s: %s" % (_ro_date(data) if data else "?", act, " (id %s)" % aid if aid else "", shown))
+    if not rows:
+        out.append("  (nimic)")
+    return "\n".join(out)
+
+
 def doc_id_of(act):
     m = re.search(r"(\d+)\s*$", str(act).strip().rstrip("/"))
     if not m:
@@ -224,6 +318,7 @@ def get_in_force(act, no_cache=False, forma_baza=False, exact=False):
 
     meta = {"id": doc_id, "url": "https://%s/Public/DetaliiDocument/%s" % (HOST, doc_id),
             "forma": None, "data_consolidare": None, "id_consolidare": None}
+    raw = ""
     if forma_baza:
         text = html_to_text(fetch_html("/Public/DetaliiDocumentAfis/%s" % doc_id))
         meta["forma"] = "publicată inițial (cerută explicit)"
@@ -248,7 +343,21 @@ def get_in_force(act, no_cache=False, forma_baza=False, exact=False):
                              "sau consolidarea încă nepublicată: verifică actele modificatoare recente)")
             if not _has_body(text):
                 text = html_to_text(fetch_html("/Public/DetaliiDocumentAfis/%s" % doc_id))
-    meta["avertisment"] = repeal_warning(text)
+    # Fișa act: acțiunile stau pe FORMELE DE BAZĂ (forma inițială și fiecare republicare), pe care pagina
+    # le listează în blocul „Forme act”; o consolidare are doar ce s-a întâmplat după ea. La un „ambalaj”
+    # (Legea 53/2003) pagina urmată e cea a codului, deci formele lui intră și ele.
+    try:
+        fisa, seen_rows = [], set()
+        for fid_ in [doc_id] + [f for f in parse_forme(raw) if f != doc_id]:
+            for r in fisa_act(fid_):
+                k = tuple(sorted(r.items()))
+                if k not in seen_rows:
+                    seen_rows.add(k)
+                    fisa.append(r)
+    except (RouteBlocked, LookupError, OSError, ValueError):
+        fisa = None
+    meta["fisa"] = fisa
+    meta["avertisment"] = fisa_repeal(fisa) or repeal_warning(text)
 
     os.makedirs(CACHE_DIR, exist_ok=True)
     with open(txt_p, "w", encoding="utf-8") as f:
@@ -318,6 +427,8 @@ def header(meta):
     s = ["ACT:    id %s — %s" % (meta["id"], meta["url"]), "FORMA:  " + meta["forma"]]
     if meta.get("id_consolidare"):
         s.append("        (id consolidare %s)" % meta["id_consolidare"])
+    if "fisa" in meta:
+        s.append("FIȘA:   " + fisa_line(meta["fisa"]))
     if meta.get("avertisment"):
         s.append("ATENȚIE: " + meta["avertisment"])
     if meta.get("cache"):
@@ -333,6 +444,8 @@ def main(argv=None):
     ap.add_argument("--grep", help="regex căutat în text (linii cu context)")
     ap.add_argument("--context", type=int, default=1)
     ap.add_argument("--info", action="store_true", help="doar forma/data, fără text")
+    ap.add_argument("--modificari", nargs="?", const="", metavar="DE-LA",
+                    help="acțiunile din Fișa act (toate, sau de la data AAAA-LL-ZZ / ZZ.LL.AAAA)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--forma-baza", action="store_true", help="forma publicată inițial")
@@ -363,6 +476,12 @@ def main(argv=None):
         print(json.dumps({k: v for k, v in meta.items() if k != "text"}, ensure_ascii=False, indent=1))
     else:
         print(header(meta))
+    if a.modificari is not None:
+        try:
+            print("\n" + format_fisa(meta.get("fisa"), a.modificari))
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 1
     if a.articol:
         art = extract_articol(meta["text"], a.articol)
         if art is None:

@@ -6,7 +6,8 @@
 
 - **Ce trimite skill-ul**: doar textul căutării tale (de exemplu `OUG 57/2019` sau cuvintele dintr-o căutare
   liberă) către portalul oficial `legislatie.just.ro` — API-ul public SOAP (`/apiws/FreeWebService.svc/SOAP`)
-  pentru căutare și paginile `Public/DetaliiDocument/<id>` pentru text. Niciun alt server nu este contactat.
+  pentru căutare, paginile `Public/DetaliiDocument/<id>` pentru text și `Public/actiuniSuferite` (cu id-ul actului)
+  pentru „Fișa act”. Niciun alt server nu este contactat.
   Identificatorii `http://tempuri.org/` și `schemas.xmlsoap.org` din cod sunt namespace-uri XML cerute de
   protocolul SOAP, nu destinații ale vreunei cereri.
 - **Ce nu face**: nu colectează, nu stochează și nu transmite date personale; nu are telemetrie, conturi, chei API
@@ -24,7 +25,8 @@
 
 - **What the skill sends**: only your query (for example `OUG 57/2019`, or the words of a free-text search) to the
   official portal `legislatie.just.ro` — its public SOAP API (`/apiws/FreeWebService.svc/SOAP`) for search and the
-  `Public/DetaliiDocument/<id>` pages for text. No other server is contacted. `http://tempuri.org/` and
+  `Public/DetaliiDocument/<id>` pages for text and `Public/actiuniSuferite` (with the act id) for the act's record.
+  No other server is contacted. `http://tempuri.org/` and
   `schemas.xmlsoap.org` in the code are XML namespaces required by SOAP, not request destinations.
 - **What it does not do**: it collects, stores and transmits no personal data; it has no telemetry, accounts, API
   keys or services of its own. The author receives nothing about your searches.

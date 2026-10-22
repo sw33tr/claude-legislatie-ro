@@ -34,8 +34,9 @@ din ce dată e.
 - urmează automat actele care sunt doar „ambalaj” (Legea 53/2003 → Codul muncii);
 - când același număr și an vin de la emitenți diferiți (Decizia 60/2020: Prim-Ministrul și CCR; Ordinul 1/2026:
   șase instituții), listează emitenții și cere `--emitent` în loc să aleagă singur;
-- semnalează abrogarea când se vede în textul consolidat (notă în antet sau toate articolele marcate „Abrogat.”);
-  un act abrogat după ultima lui consolidare nu poate fi detectat așa;
+- citește „Fișa act” a portalului: ce a modificat, completat, abrogat sau suspendat actul, cu actul și data
+  (`--modificari`, opțional de la o dată); semnalează abrogarea întregului act din fișă sau, când fișa tace, din
+  articolele marcate „Abrogat.” în textul consolidat;
 - oferă forme istorice (`--id <id consolidare> --exact`).
 
 ### Instalare
@@ -54,7 +55,8 @@ Claude mergi la **Customize → Skills → + → Create skill → Upload a skill
 
 - Singurul server contactat este portalul oficial `legislatie.just.ro`: API-ul public SOAP
   (`/apiws/FreeWebService.svc/SOAP`, prin http, cu revenire la https) pentru căutare și paginile
-  `Public/DetaliiDocument/<id>` (https) pentru text. Se trimite doar ce cauți (ex. `OUG 57/2019`).
+  `Public/DetaliiDocument/<id>` (https) pentru text și `Public/actiuniSuferite` (https, POST cu id-ul actului)
+  pentru „Fișa act”. Se trimite doar ce cauți (ex. `OUG 57/2019`) și id-ul actului.
 - Fără telemetrie, conturi sau chei API. Nu citește și nu trimite date personale.
 - `http://tempuri.org/` și `schemas.xmlsoap.org` apar în cod doar ca namespace-uri XML cerute de protocolul SOAP;
   nicio cerere nu pleacă spre ele.
@@ -109,8 +111,9 @@ for the same act. They look alike, but the published form silently lacks every l
 article extraction (`56`, `485^1`, `XLIX`) including the amendment notes and High Court /
 Constitutional Court decisions attached to it; wrapper-act resolution (Law 53/2003 → Labour Code); when the same number and year come from several
 issuers (decisions, ministerial orders) it lists them and asks for `--emitent` instead of guessing;
-repeal warnings when the consolidated text shows them (an act repealed after its last consolidation
-cannot be detected this way); historical versions.
+the portal's "Fișa act" (what amended, completed, repealed or suspended the act, by which act and when —
+`--modificari`, optionally since a date); repeal warnings from that record or, when it is silent, from the articles
+marked "Abrogat." in the consolidated text; historical versions.
 
 **Install:**
 
@@ -126,8 +129,8 @@ labelled as the published form.
 
 **What it runs and sends:** the only server contacted is the official portal
 `legislatie.just.ro`: its public SOAP API (`/apiws/FreeWebService.svc/SOAP`, over http with an
-https fallback) for search, and `Public/DetaliiDocument/<id>` pages (https) for text. Only your
-query (e.g. `OUG 57/2019`) is sent. No telemetry, accounts or API keys; no personal data is read or
+https fallback) for search, `Public/DetaliiDocument/<id>` pages (https) for text and `Public/actiuniSuferite`
+(https, POST with the act id) for the act's record. Only your query (e.g. `OUG 57/2019`) and the act id are sent. No telemetry, accounts or API keys; no personal data is read or
 sent. `http://tempuri.org/` and `schemas.xmlsoap.org` appear in the code only as XML namespaces required by
 SOAP; no request is ever sent to them. Downloaded text is cached locally in `legislatie_cache` under the system temp directory (or
 `$LEGISLATIE_CACHE`). In Cowork, when the portal is unreachable from the cloud, the skill copies its

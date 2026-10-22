@@ -34,6 +34,7 @@ python3 "$S/legislatie_search.py" "OUG 57/2019"                        # metadat
 python3 "$S/legislatie_search.py" "OUG 57/2019" --articol 485^1        # text în vigoare + articol
 python3 "$S/legislatie_search.py" "Lege 53/2003" --grep "concediu de odihn"
 python3 "$S/legislatie_search.py" --id 215925 --articol 56             # după id / link, fără căutare
+python3 "$S/legislatie_search.py" "Codul administrativ" --modificari 2026-06-01   # ce l-a modificat de la o dată
 python3 "$S/legislatie_search.py" --diagnostic                         # ce rută merge de aici
 ```
 
@@ -41,8 +42,17 @@ Antetul fiecărui text spune forma. Raportează-l mereu:
 
 ```
 ACT:    id 215925 — https://legislatie.just.ro/Public/DetaliiDocument/215925
-FORMA:  consolidată — Consolidarea din 12.09.2026
+FORMA:  consolidată — Consolidarea din 20.10.2026
+FIȘA:   291 acțiuni; ultima: 20.10.2026 ORD DE URGENTA 40 (ART. 20 modificat)
 ```
+
+`FIȘA` vine din „Fișa act” a portalului (tab-ul „Acțiuni suferite”): toate modificările, completările, abrogările
+și suspendările, cu actul și data. `--modificari` le listează (toate, sau de la o dată: `--modificari 2026-06-01`),
+grupate pe actul modificator, cu id-ul lui — bun pentru „ce s-a schimbat de la ultima verificare” și pentru a
+descărca apoi actul modificator cu `--id`. O linie `ATENȚIE: ABROGAT de …` vine tot din fișă când portalul
+consemnează abrogarea întregului act; fișa rămâne însă uneori în urmă (Legea 188/1999 nu are abrogarea prin Codul
+administrativ), de aceea avertismentul se bazează și pe articolele marcate „Abrogat.” din text. Când și fișa, și
+textul tac, nu afirma că actul e în vigoare fără să verifici actele modificatoare recente.
 
 Coduri de ieșire: `0` ok · `2` niciun rezultat **sau AMBIGUU** (același număr și an de la mai mulți emitenți:
 scriptul îi listează pe stderr; arată-i utilizatorului lista sau alege cu `--emitent`, nu ghici) ·
@@ -65,7 +75,7 @@ altfel sari la ruta 3. Pașii de mai jos sunt pentru Cowork:
 1. Caută o instalare existentă (orice folder conectat):
    `D=$(dirname "$(ls $HOME/mnt/*/.legislatie-ro/lj_core.py 2>/dev/null | head -1)"); python3 "$D/lj_core.py" --version`
 2. Dacă lipsește sau versiunea e mai mică decât `lj_core.VERSION` din `$S`, instaleaz-o: copiază ambele
-   scripturi în directorul de output al sesiunii sub **nume versionate** (ex. `lj_core_6.3.0.py`), pentru că
+   scripturi în directorul de output al sesiunii sub **nume versionate** (ex. `lj_core_6.4.0.py`), pentru că
    `device_commit_files` poate livra o încărcare anterioară cu același nume. Apoi fă commit în
    `<folder conectat>/.legislatie-ro/lj_core.py` și `…/legislatie_search.py`. Verifică cu `md5sum`.
    Spune-i utilizatorului, într-un rând, că ai creat folderul ascuns `.legislatie-ro`.

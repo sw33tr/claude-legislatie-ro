@@ -22,7 +22,9 @@ Instrumente: Claude in Chrome (`mcp__claude-in-chrome__*`, preferat) sau browser
    - Dacă „alte consolidări, cea mai recentă” are o dată MAI NOUĂ decât forma afișată, navighează la acel id.
 4. Citește textul pe bucăți: `window.__a.substring(0, 700)`, `(700, 1400)`, … `javascript_tool` din
    Chrome trunchiază răspunsul la ~800 de caractere pe apel, indiferent cât returnează expresia.
-5. Închide tab-ul (`tabs_close_mcp`).
+5. Pentru „ce a modificat actul” deschide pe aceeași pagină tab-ul **Fișă act → Acțiuni suferite** (se încarcă la
+   click): tabel cu secțiunea, operațiunea și actul modificator, cu link spre el. Echivalentul lui `--modificari`.
+6. Închide tab-ul (`tabs_close_mcp`).
 
 Nu apela `get_page_text` / `read_page` pe acte mari: Codul administrativ are 1,5 milioane de caractere.
 
