@@ -36,6 +36,7 @@ python3 "$S/legislatie_search.py" "Lege 53/2003" --grep "concediu de odihn"
 python3 "$S/legislatie_search.py" --id 215925 --articol 56             # după id / link, fără căutare
 python3 "$S/legislatie_search.py" "Codul administrativ" --modificari 2026-06-01   # ce l-a modificat de la o dată
 python3 "$S/legislatie_search.py" --diagnostic                         # ce rută merge de aici
+python3 "$S/legislatie_search.py" --selftest                           # dacă ceva pare stricat: ce euristică a cedat
 ```
 
 Antetul fiecărui text spune forma. Raportează-l mereu:
@@ -75,7 +76,7 @@ altfel sari la ruta 3. Pașii de mai jos sunt pentru Cowork:
 1. Caută o instalare existentă (orice folder conectat):
    `D=$(dirname "$(ls $HOME/mnt/*/.legislatie-ro/lj_core.py 2>/dev/null | head -1)"); python3 "$D/lj_core.py" --version`
 2. Dacă lipsește sau versiunea e mai mică decât `lj_core.VERSION` din `$S`, instaleaz-o: copiază ambele
-   scripturi în directorul de output al sesiunii sub **nume versionate** (ex. `lj_core_6.4.0.py`), pentru că
+   scripturi în directorul de output al sesiunii sub **nume versionate** (ex. `lj_core_6.5.0.py`), pentru că
    `device_commit_files` poate livra o încărcare anterioară cu același nume. Apoi fă commit în
    `<folder conectat>/.legislatie-ro/lj_core.py` și `…/legislatie_search.py`. Verifică cu `md5sum`.
    Spune-i utilizatorului, într-un rând, că ai creat folderul ascuns `.legislatie-ro`.

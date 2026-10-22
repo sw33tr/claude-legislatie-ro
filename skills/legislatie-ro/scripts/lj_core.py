@@ -15,7 +15,7 @@ import argparse, json, os, re, ssl, sys, tempfile, time
 import urllib.error, urllib.parse, urllib.request
 from html.parser import HTMLParser
 
-VERSION = "6.4.0"
+VERSION = "6.5.0"
 HOST = "legislatie.just.ro"
 UA = "Mozilla/5.0 (legislatie-skill)"
 CACHE_DIR = os.environ.get("LEGISLATIE_CACHE") or os.path.join(tempfile.gettempdir(), "legislatie_cache")
@@ -400,8 +400,11 @@ def extract_articol(text, ref):
         num, stop = "(?:unic|UNIC|Unic)", r"\b"
     else:
         num, stop = _num_pattern(ref), r"(?![\d^.])"
-    start = re.compile(r"(?m)^%s\s+%s%s" % (lead, num, stop))
-    nxt = re.compile(r"(?m)^%s\s+(?:\d+(?:\.\d{3})*(?:\^\d+)?|[IVXLCDM]+|unic|UNIC)(?![\w^.])" % lead)
+    # Liniile-notă de sub un articol („Articolul 1 din Capitolul I a fost abrogat de…”) încep tot cu
+    # „Articolul N” și pot fi mai lungi decât corpul („Articolul 1 Abrogat.”): nu sunt titluri.
+    not_note = r"(?!\s+(?:din|a fost|al|ale|alin\.?|lit\.?)\b)"
+    start = re.compile(r"(?m)^%s\s+%s%s%s" % (lead, num, stop, not_note))
+    nxt = re.compile(r"(?m)^%s\s+(?:\d+(?:\.\d{3})*(?:\^\d+)?|[IVXLCDM]+|unic|UNIC)(?![\w^.])%s" % (lead, not_note))
     best = None
     for m in start.finditer(text):  # prima apariție e de obicei cuprinsul: luăm corpul cel mai lung
         n = nxt.search(text, m.end())

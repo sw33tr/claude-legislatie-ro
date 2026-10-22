@@ -1,0 +1,63 @@
+name: smoke test (legislatie.just.ro)
+
+# The skill rests on heuristics about the portal's markup ("Forma printabilă", istoric_fa, Forme act…).
+# This runs the skill's own --selftest weekly and on demand, on Linux and Windows, and opens an issue
+# when a check fails. Exit code 3 (portal unreachable from the runner) is reported as inconclusive,
+# not as a failure: the portal blocks some datacenter networks.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "skills/legislatie-ro/scripts/**"
+      - ".github/workflows/smoke.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  selftest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.9", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: offline checks (parsers, regexes)
+        run: python skills/legislatie-ro/scripts/selftest.py --offline
+      - name: live checks (portal)
+        id: live
+        shell: bash
+        run: |
+          set +e
+          python skills/legislatie-ro/scripts/selftest.py
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          if [ "$rc" = "3" ]; then echo "::warning::portal unreachable from this runner — live checks inconclusive"; exit 0; fi
+          exit $rc
+
+  report:
+    needs: selftest
+    if: failure() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "smoke test failed: the portal's markup or the skill's heuristics changed";
+            const open = await github.rest.issues.listForRepo({ owner: context.repo.owner, repo: context.repo.repo, state: "open", labels: "smoke" });
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `The weekly \`--selftest\` failed on at least one runner: ${url}\n\nEach failing check names the heuristic to look at (\`_body_text\`, \`parse_istoric\`, \`parse_forme\`, \`fisa_act\`, \`extract_articol\`…). Run it locally with:\n\n\`\`\`\npython3 skills/legislatie-ro/scripts/legislatie_search.py --selftest\n\`\`\``;
+            if (open.data.length) {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: open.data[0].number, body: `Still failing: ${url}` });
+            } else {
+              await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title, body, labels: ["smoke"] });
+            }

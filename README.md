@@ -84,9 +84,16 @@ Scripturile folosesc doar biblioteca standard Python 3.6+:
 python3 skills/legislatie-ro/scripts/legislatie_search.py "OUG 57/2019" --articol 485^1
 python3 skills/legislatie-ro/scripts/legislatie_search.py "Lege 53/2003" --grep "concediu de odihn"
 python3 skills/legislatie-ro/scripts/legislatie_search.py --diagnostic
+python3 skills/legislatie-ro/scripts/legislatie_search.py --selftest     # verifică euristicile, offline + live
 ```
 
 Pe Windows folosește `py -3` în loc de `python3`.
+
+### Întreținere
+
+Skill-ul se sprijină pe marcajul paginilor portalului („Forma printabilă”, blocul de consolidări, „Forme act”). Un
+[test săptămânal](.github/workflows/smoke.yml) rulează `--selftest` (Linux și Windows, Python 3.9 și 3.12) și deschide un
+issue când o verificare cade; fiecare verificare numește euristica de urmărit. Rulează-l și local după orice modificare.
 
 ### Limitări
 

@@ -437,12 +437,17 @@ def main():
     parser.add_argument("--api-text", action="store_true",
                         help="Dacă HTTPS e blocat: text din API (FORMA PUBLICATĂ INIȚIAL, marcată ca atare)")
     parser.add_argument("--diagnostic", action="store_true", help="Testează accesul și spune ce rută merge")
+    parser.add_argument("--selftest", action="store_true",
+                        help="Verifică euristicile skill-ului (offline + live) și spune ce s-a rupt")
     parser.add_argument("--version", action="store_true")
     args = parser.parse_args()
 
     if args.version:
         print("legislatie_search 6 / lj_core", lj_core.VERSION)
         return 0
+    if args.selftest:
+        import selftest
+        return selftest.main([])
     if args.diagnostic:
         return diagnostic()
     if args.articol or args.grep or args.silent or args.modificari is not None:
